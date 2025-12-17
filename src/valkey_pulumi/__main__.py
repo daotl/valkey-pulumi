@@ -18,23 +18,51 @@ ACL_MOUNT_PATH = "/opt/bitnami/valkey/mounted-etc/users.acl"
 
 
 def _bool_to_yes_no(value: bool | None) -> str | None:
+    """
+    Map a boolean or None to the corresponding "yes"/"no" string or None.
+    
+    Parameters:
+        value (bool | None): The boolean value to convert; may be None.
+    
+    Returns:
+        str | None: `"yes"` if `value` is True, `"no"` if `value` is False, or `None` if `value` is None.
+    """
     if value is None:
         return None
     return "yes" if value else "no"
 
 
-def _env_args(env_map: dict[str, str | None]) -> list[docker.ContainerEnvironmentArgs]:
-    """Convert a mapping of env var names to Pulumi container env args."""
-    args: list[docker.ContainerEnvironmentArgs] = []
+def _env_args(env_map: dict[str, str | None]) -> list[str]:
+    """
+    Builds a list of environment variable strings from a mapping, skipping entries with None values.
+    
+    Parameters:
+        env_map (dict[str, str | None]): Mapping of environment variable names to their values. Entries with value `None` are omitted.
+    
+    Returns:
+        list[str]: A list of strings formatted as "NAME=VALUE" for each mapping entry whose value is not `None`.
+    """
+    args: list[str] = []
     for name, value in env_map.items():
         if value is None:
             continue
-        args.append(docker.ContainerEnvironmentArgs(name=name, value=value))
+        args.append(f"{name}={value}")
     return args
 
 
-def _build_env(config: Config, overrides: dict[str, str | None] | None = None) -> list[docker.ContainerEnvironmentArgs]:
-    """Build environment variables for a container from a Config."""
+def _build_env(config: Config, overrides: dict[str, str | None] | None = None) -> list[str]:
+    """
+    Construct a list of container environment variable strings from a Config and optional overrides.
+    
+    Builds a mapping of Valkey-related environment names to values from `config`, applies any `overrides` to that mapping, omits entries whose value is `None`, and returns the final list of "NAME=VALUE" strings. Any entries in `config.extra_env_vars` are appended as-is.
+    
+    Parameters:
+        config (Config): Source configuration for environment variables.
+        overrides (dict[str, str | None] | None): Optional mapping of environment variable names to values (use `None` to omit an entry).
+    
+    Returns:
+        list[str]: A list of environment variable assignments in the form "NAME=VALUE"; variables with `None` values are excluded.
+    """
     env_map: dict[str, str | None] = {
         # Authentication
         "ALLOW_EMPTY_PASSWORD": "yes" if config.allow_empty_password else None,
@@ -90,7 +118,7 @@ def _build_env(config: Config, overrides: dict[str, str | None] | None = None) -
 
     # Extra environment variables (truly custom ones)
     for key, value in config.extra_env_vars.items():
-        env_vars.append(docker.ContainerEnvironmentArgs(name=key, value=value))
+        env_vars.append(f"{key}={value}")
 
     return env_vars
 
@@ -187,7 +215,16 @@ class ValkeyStandalone:
         self._deploy()
 
     def _deploy(self):
-        """Deploy the standalone Valkey container."""
+        """
+        Deploy the standalone Valkey container.
+        
+        Creates and configures data persistence (host bind or Docker volume), mounts TLS/ACL/config files, instantiates the Docker container, and exports Pulumi outputs for host, port, and endpoint.
+        
+        Side effects:
+        - May create and store a Docker volume on self.volume when persistence is enabled and no host_data_path is provided.
+        - Creates and stores the Docker container on self.container.
+        - Exports Pulumi stack outputs: "<name>_host", "<name>_port", and "<name>_endpoint".
+        """
         volume_name = self.config.volume_name or f"{self.name}_data"
 
         # Create volume/bind for data persistence
@@ -202,7 +239,7 @@ class ValkeyStandalone:
                 )
             )
         elif self.config.persistence_enabled:
-            self.volume = docker.Volume(volume_name, name=volume_name, opts=docker.VolumeOpts(driver="local"))
+            self.volume = docker.Volume(volume_name, name=volume_name, driver="local")
             volumes.append(
                 docker.ContainerVolumeArgs(
                     container_path=self.config.valkey_data_dir,
@@ -226,7 +263,7 @@ class ValkeyStandalone:
             image=docker.RemoteImage(f"{self.name}_image", name=self.config.image, keep_locally=False),
             ports=[docker.ContainerPortArgs(internal=self.config.port, external=self.config.port)],
             envs=_build_env(self.config),
-            restart=docker.ContainerRestartArgs(retry=0, condition=self.config.restart_policy),
+            restart=self.config.restart_policy,
             volumes=volumes,
             opts=pulumi.ResourceOptions(depends_on=depends_on if depends_on else None),
         )
@@ -234,7 +271,7 @@ class ValkeyStandalone:
         # Export connection details
         pulumi.export(f"{self.name}_host", self.container.name)
         pulumi.export(f"{self.name}_port", self.config.port)
-        pulumi.export(f"{self.name}_endpoint", f"{self.container.name}:{self.config.port}")
+        pulumi.export(f"{self.name}_endpoint", self.container.name.apply(lambda name: f"{name}:{self.config.port}"))
 
 
 class ValkeyReplicaSet:
@@ -248,6 +285,16 @@ class ValkeyReplicaSet:
         replica_count: int | None = None,
         replica_port_offset: int | None = None,
     ):
+        """
+        Initialize a Valkey replica set and deploy its primary and replica containers.
+        
+        Parameters:
+            name (str): Logical name used for resource naming and exports.
+            primary_config (Config): Configuration for the primary Valkey instance.
+            replica_config (Config): Configuration applied to each replica instance.
+            replica_count (int | None): Number of replicas to create; when None, uses replica_config.replica_count.
+            replica_port_offset (int | None): Port offset applied to replicas; when None, uses replica_config.replica_port_offset.
+        """
         self.name = name
         self.primary_config = primary_config
         self.replica_config = replica_config
@@ -257,13 +304,26 @@ class ValkeyReplicaSet:
         )
         self._deploy()
 
-    def _get_primary_environment(self) -> list[docker.ContainerEnvironmentArgs]:
-        """Build environment variables for primary container."""
+    def _get_primary_environment(self) -> list[str]:
+        """
+        Prepare environment variable entries for the primary Valkey container.
+        
+        Returns:
+            list[str]: List of "NAME=VALUE" strings to apply to the container environment; includes `VALKEY_REPLICATION_MODE=primary`.
+        """
         overrides = {"VALKEY_REPLICATION_MODE": "primary"}
         return _build_env(self.primary_config, overrides)
 
-    def _get_replica_environment(self) -> list[docker.ContainerEnvironmentArgs]:
-        """Build environment variables for replica containers."""
+    def _get_replica_environment(self) -> list[str]:
+        """
+        Construct environment variables required to configure a replica Valkey container.
+        
+        Includes replication-specific settings (replication mode, primary host/port, and passwords)
+        and sets `ALLOW_EMPTY_PASSWORD` to "yes" when the replica permits an empty primary password.
+        
+        Returns:
+            env_list (list[str]): List of environment variable strings in the form "NAME=VALUE".
+        """
         primary_password = self.primary_config.password or self.replica_config.password
 
         overrides = {
@@ -280,11 +340,13 @@ class ValkeyReplicaSet:
         return _build_env(self.replica_config, overrides)
 
     def _deploy(self):
-        """Deploy the Valkey replica set."""
+        """
+        Create and deploy a Valkey replica set: a shared network, a primary container, and one or more replica containers.
+        
+        This builds and attaches persistent storage (host path or Docker volumes) for primary and replicas as configured, creates a dedicated Docker network, starts the primary and replica containers with appropriate environment, ports, volumes, and restart policies, and exports connection details (primary host, port, primary endpoint, per-replica host/port, and a list of replica endpoints) for external use.
+        """
         # Create shared network for communication
-        self.network = docker.Network(
-            f"{self.name}_network", name=f"{self.name}_network", opts=docker.NetworkOpts(driver="bridge")
-        )
+        self.network = docker.Network(f"{self.name}_network", name=f"{self.name}_network", driver="bridge")
 
         # Deploy primary container
         primary_volumes = _file_mounts(self.primary_config)
@@ -300,7 +362,7 @@ class ValkeyReplicaSet:
             )
         elif self.primary_config.persistence_enabled:
             volume_name = self.primary_config.volume_name or f"{self.name}_primary_data"
-            self.primary_volume = docker.Volume(volume_name, name=volume_name, opts=docker.VolumeOpts(driver="local"))
+            self.primary_volume = docker.Volume(volume_name, name=volume_name, driver="local")
             primary_depends.append(self.primary_volume)
             primary_volumes.append(
                 docker.ContainerVolumeArgs(
@@ -317,9 +379,11 @@ class ValkeyReplicaSet:
             image=docker.RemoteImage(f"{self.name}_primary_image", name=self.primary_config.image, keep_locally=False),
             ports=[docker.ContainerPortArgs(internal=self.primary_config.port, external=self.primary_config.port)],
             envs=self._get_primary_environment(),
-            restart=docker.ContainerRestartArgs(retry=0, condition=self.primary_config.restart_policy),
+            restart=self.primary_config.restart_policy,
             volumes=primary_volumes,
-            network_mode=docker.NetworkModeArgs(name=self.network.name, aliases=[f"{self.name}-primary"]),
+            networks_advanced=[
+                docker.ContainerNetworksAdvancedArgs(name=self.network.name, aliases=[f"{self.name}-primary"])
+            ],
             opts=pulumi.ResourceOptions(depends_on=primary_depends),
         )
 
@@ -342,9 +406,7 @@ class ValkeyReplicaSet:
                     )
                 )
             elif self.replica_config.persistence_enabled:
-                replica_volume = docker.Volume(
-                    f"{replica_name}_data", name=f"{replica_name}_data", opts=docker.VolumeOpts(driver="local")
-                )
+                replica_volume = docker.Volume(f"{replica_name}_data", name=f"{replica_name}_data", driver="local")
                 self.replica_volumes.append(replica_volume)
                 replica_volumes.append(
                     docker.ContainerVolumeArgs(
@@ -369,9 +431,11 @@ class ValkeyReplicaSet:
                     )
                 ],
                 envs=self._get_replica_environment(),
-                restart=docker.ContainerRestartArgs(retry=0, condition=self.replica_config.restart_policy),
+                restart=self.replica_config.restart_policy,
                 volumes=replica_volumes,
-                network_mode=docker.NetworkModeArgs(name=self.network.name, aliases=[replica_name]),
+                networks_advanced=[
+                    docker.ContainerNetworksAdvancedArgs(name=self.network.name, aliases=[replica_name])
+                ],
                 opts=pulumi.ResourceOptions(depends_on=replica_depends_on),
             )
             self.replicas.append(replica)
@@ -379,14 +443,16 @@ class ValkeyReplicaSet:
         # Export connection details
         pulumi.export(f"{self.name}_primary_host", self.primary.name)
         pulumi.export(f"{self.name}_primary_port", self.primary_config.port)
-        pulumi.export(f"{self.name}_primary_endpoint", f"{self.primary.name}:{self.primary_config.port}")
+        pulumi.export(
+            f"{self.name}_primary_endpoint", self.primary.name.apply(lambda name: f"{name}:{self.primary_config.port}")
+        )
 
         replica_endpoints = []
         for i, replica in enumerate(self.replicas):
             replica_external_port = self.replica_config.port + self.replica_port_offset + i
             pulumi.export(f"{self.name}_replica_{i}_host", replica.name)
             pulumi.export(f"{self.name}_replica_{i}_port", replica_external_port)
-            replica_endpoints.append(f"{replica.name}:{replica_external_port}")
+            replica_endpoints.append(replica.name.apply(lambda name, port=replica_external_port: f"{name}:{port}"))
 
         pulumi.export(f"{self.name}_replica_endpoints", replica_endpoints)
 

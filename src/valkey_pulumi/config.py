@@ -133,6 +133,17 @@ class Config:
         # Custom environment variables
         extra_env_vars: dict[str, str] | None = None,
     ):
+        """
+        Initialize a Valkey deployment configuration by resolving each setting from the explicit argument, Pulumi configuration, or the built-in defaults.
+        
+        For each attribute the initializer selects the first non-None value in this precedence: the provided parameter, the Pulumi config value (keys are namespaced as `valkey:<name>`), then `DEFAULT_VALKEY_CONFIG`. Many parameters accept `None` to indicate "use Pulumi or default".
+        
+        Parameters:
+            extra_flags (list[str] | None): If provided and is a list/tuple, converted to a tuple and assigned; otherwise an empty tuple is used after resolving Pulumi/default values.
+            disable_commands (list[str] | None): Sequence of command names to disable; resolved from the argument, Pulumi (`valkey:disable_commands`), or defaults.
+            extra_env_vars (dict[str, str] | None): If provided, used as the final extra environment variables; otherwise Pulumi's `valkey:extra_env_vars` or the default mapping is used.
+        
+        """
         pulumi_config = pulumi.Config()
 
         # Basic Configuration
@@ -151,9 +162,10 @@ class Config:
             pulumi_config.get_object("valkey:disable_commands"),
             DEFAULT_VALKEY_CONFIG["disable_commands"],
         )
-        self.extra_flags = tuple(
-            _coalesce(extra_flags, pulumi_config.get_list("valkey:extra_flags"), DEFAULT_VALKEY_CONFIG["extra_flags"])
+        value = _coalesce(
+            extra_flags, pulumi_config.get_object("valkey:extra_flags"), DEFAULT_VALKEY_CONFIG["extra_flags"]
         )
+        self.extra_flags = tuple(value if isinstance(value, (list, tuple)) else ())
 
         # Persistence
         self.aof_enabled = _coalesce(
