@@ -5,15 +5,26 @@ This demonstrates how to deploy Valkey with fine-grained access control using AC
 
 from valkey_pulumi import create_standalone_valkey
 
-# Create Valkey with ACL file for fine-grained access control
-acl_valkey = create_standalone_valkey(
-    "acl-valkey",
-    password="admin_password",
-    acl_file="/etc/valkey/acl.conf",  # Path to ACL configuration file
-    port=6379,
-    persistence_enabled=True,
-    disable_commands=["CONFIG", "DEBUG", "EVAL"],
-)
+
+def deploy_acl_valkey():
+    """Deploy Valkey with Access Control List (ACL) enabled."""
+    # Create Valkey with ACL file for fine-grained access control
+    acl_valkey = create_standalone_valkey(
+        "acl-valkey",
+        password="admin_password",
+        acl_file="/etc/valkey/acl.conf",  # Path to ACL configuration file
+        port=6379,
+        persistence_enabled=True,
+        disable_commands=["CONFIG", "DEBUG", "EVAL"],
+    )
+
+    print("ACL-enabled Valkey deployment configured!")
+    print("Create an ACL file at /etc/valkey/acl.conf with rules like the example above")
+    print("Connect as admin: redis-cli -h <host> -p 6379 -a admin_password")
+    print("Test ACL: ACL LIST")
+
+    return acl_valkey
+
 
 # Example ACL file content (save as /etc/valkey/acl.conf):
 """
@@ -42,7 +53,5 @@ user pubsub_user on >pubsub_password ~* +@pubsub ~channel*
 user limited_user on >limited_password ~data:specific:* +get +set +hget +hset
 """
 
-print("ACL-enabled Valkey deployment configured!")
-print("Create an ACL file at /etc/valkey/acl.conf with rules like the example above")
-print("Connect as admin: redis-cli -h <host> -p 6379 -a admin_password")
-print("Test ACL: ACL LIST")
+if __name__ == "__main__":
+    deploy_acl_valkey()

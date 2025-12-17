@@ -5,3 +5,4 @@ runtime:
     toolchain: uv
     virtualenv: venv
 description: Pulumi Python deployment for Valkey using Docker backend
+main: src/valkey_pulumi/__main__.py
