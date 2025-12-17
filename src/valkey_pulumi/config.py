@@ -151,9 +151,10 @@ class Config:
             pulumi_config.get_object("valkey:disable_commands"),
             DEFAULT_VALKEY_CONFIG["disable_commands"],
         )
-        self.extra_flags = tuple(
-            _coalesce(extra_flags, pulumi_config.get_object("valkey:extra_flags"), DEFAULT_VALKEY_CONFIG["extra_flags"])
+        value = _coalesce(
+            extra_flags, pulumi_config.get_object("valkey:extra_flags"), DEFAULT_VALKEY_CONFIG["extra_flags"]
         )
+        self.extra_flags = tuple(value if isinstance(value, (list, tuple)) else ())
 
         # Persistence
         self.aof_enabled = _coalesce(
