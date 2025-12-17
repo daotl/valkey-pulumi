@@ -5,11 +5,7 @@ Bitnami's Valkey Docker images and Docker Compose configurations.
 """
 
 import os
-import sys
 from typing import Any
-
-# Ensure the src directory is in the Python path
-sys.path.insert(0, os.path.join(os.getcwd(), "src"))
 
 import pulumi
 import pulumi_docker as docker
@@ -266,12 +262,12 @@ class ValkeyReplicaSet:
         )
         self._deploy()
 
-    def _get_primary_environment(self) -> list[str]:
+    def _get_primary_environment(self) -> list[pulumi.Input[str]]:
         """Build environment variables for primary container."""
         overrides = {"VALKEY_REPLICATION_MODE": "primary"}
         return _build_env(self.primary_config, overrides)
 
-    def _get_replica_environment(self) -> list[str]:
+    def _get_replica_environment(self) -> list[pulumi.Input[str]]:
         """Build environment variables for replica containers."""
         primary_password = self.primary_config.password or self.replica_config.password
 
