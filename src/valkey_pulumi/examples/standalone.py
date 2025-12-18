@@ -56,11 +56,4 @@ def deploy_simple_valkey():
 
 if __name__ == "__main__":
     # Deploy the standalone Valkey instance
-    valkey_instance = deploy_standalone_valkey()
-
-    print("Standalone Valkey deployment created successfully!")
-    print("Connection details:")
-    print(f"  Host: {valkey_instance.container.name}")
-    print("  Port: 6379")
-    print("  Password: my_secure_password")
-    print(f"  Endpoint: {valkey_instance.container.name}:6379")
+    deploy_standalone_valkey()

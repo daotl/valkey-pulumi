@@ -77,18 +77,4 @@ def deploy_simple_replica_set():
 
 if __name__ == "__main__":
     # Deploy the Valkey replica set
-    replica_set_instance = deploy_valkey_replica_set()
-
-    print("Valkey replica set deployment created successfully!")
-    print("Primary details:")
-    print(f"  Host: {replica_set_instance.primary.name}")
-    print("  Port: 6379")
-    print("  Password: my_password")
-    print(f"  Endpoint: {replica_set_instance.primary.name}:6379")
-
-    print("\nReplica details:")
-    for i, replica in enumerate(replica_set_instance.replicas):
-        print(f"  Replica {i}:")
-        print(f"    Host: {replica.name}")
-        print(f"    Port: {6379 + i + 1}")
-        print(f"    Endpoint: {replica.name}:{6379 + i + 1}")
+    deploy_valkey_replica_set()

@@ -10,7 +10,7 @@ from typing import Any
 import pulumi
 import pulumi_docker as docker
 
-from .config import Config
+from valkey_pulumi.config import Config
 
 CONFIG_MOUNT_PATH = "/opt/bitnami/valkey/mounted-etc/valkey.conf"
 OVERRIDES_MOUNT_PATH = "/opt/bitnami/valkey/mounted-etc/overrides.conf"
@@ -64,6 +64,22 @@ def _build_env(config: Config, overrides: dict[str, str | None] | None = None) -
         list[str]: A list of environment variable assignments in the form "NAME=VALUE"; variables with `None` values are excluded.
     """
     env_map: dict[str, str | None] = {
+def _env_args(env_map: dict[str, Any]) -> list[pulumi.Input[str]]:
+    """Convert a mapping of env var names to Pulumi container env args."""
+    args: list[pulumi.Input[str]] = []
+    for name, value in env_map.items():
+        if value is None:
+            continue
+        if isinstance(value, pulumi.Output):
+            args.append(value.apply(lambda v, n=name: f"{n}={v}"))
+        else:
+            args.append(f"{name}={value}")
+    return args
+
+
+def _build_env(config: Config, overrides: dict[str, str | None] | None = None) -> list[pulumi.Input[str]]:
+    """Build environment variables for a container from a Config."""
+    env_map: dict[str, Any] = {
         # Authentication
         "ALLOW_EMPTY_PASSWORD": "yes" if config.allow_empty_password else None,
         "VALKEY_PASSWORD": config.password,
@@ -257,10 +273,12 @@ class ValkeyStandalone:
         if self.config.persistence_enabled and not self.config.host_data_path:
             depends_on.append(self.volume)
 
+        remote_image = docker.RemoteImage(f"{self.name}_image", name=self.config.image, keep_locally=False)
+
         self.container = docker.Container(
             self.name,
             name=self.name,
-            image=docker.RemoteImage(f"{self.name}_image", name=self.config.image, keep_locally=False),
+            image=remote_image.repo_digest,
             ports=[docker.ContainerPortArgs(internal=self.config.port, external=self.config.port)],
             envs=_build_env(self.config),
             restart=self.config.restart_policy,
@@ -324,6 +342,13 @@ class ValkeyReplicaSet:
         Returns:
             env_list (list[str]): List of environment variable strings in the form "NAME=VALUE".
         """
+    def _get_primary_environment(self) -> list[pulumi.Input[str]]:
+        """Build environment variables for primary container."""
+        overrides = {"VALKEY_REPLICATION_MODE": "primary"}
+        return _build_env(self.primary_config, overrides)
+
+    def _get_replica_environment(self) -> list[pulumi.Input[str]]:
+        """Build environment variables for replica containers."""
         primary_password = self.primary_config.password or self.replica_config.password
 
         overrides = {
@@ -373,10 +398,14 @@ class ValkeyReplicaSet:
                 )
             )
 
+        primary_image = docker.RemoteImage(
+            f"{self.name}_primary_image", name=self.primary_config.image, keep_locally=False
+        )
+
         self.primary = docker.Container(
             f"{self.name}-primary",
             name=f"{self.name}-primary",
-            image=docker.RemoteImage(f"{self.name}_primary_image", name=self.primary_config.image, keep_locally=False),
+            image=primary_image.repo_digest,
             ports=[docker.ContainerPortArgs(internal=self.primary_config.port, external=self.primary_config.port)],
             envs=self._get_primary_environment(),
             restart=self.primary_config.restart_policy,
@@ -418,10 +447,14 @@ class ValkeyReplicaSet:
                 )
                 replica_depends_on.append(replica_volume)
 
+            replica_image = docker.RemoteImage(
+                f"{replica_name}_image", name=self.replica_config.image, keep_locally=False
+            )
+
             replica = docker.Container(
                 replica_name,
                 name=replica_name,
-                image=docker.RemoteImage(f"{replica_name}_image", name=self.replica_config.image, keep_locally=False),
+                image=replica_image.repo_digest,
                 ports=[
                     docker.ContainerPortArgs(
                         internal=self.replica_config.port,
@@ -505,26 +538,22 @@ def create_valkey_replica_set(
     return ValkeyReplicaSet(name, primary_config, replica_config, replica_count, replica_port_offset)
 
 
-# Example usage
+def main():
+    """Deploy Valkey based on Pulumi configuration."""
+    # Load configuration
+    config = Config()
+
+    # Determine deployment strategy
+    # If 'replica_count' is specified and greater than 0, we deploy a replica set.
+    # Otherwise, we deploy a standalone instance.
+
+    if config.replica_count is not None and config.replica_count > 0:
+        pulumi.log.info(f"Deploying Valkey Replica Set with {config.replica_count} replicas")
+        create_valkey_replica_set("valkey-replica-set", replica_count=config.replica_count)
+    else:
+        pulumi.log.info("Deploying Valkey Standalone")
+        create_standalone_valkey("valkey-standalone")
+
+
 if __name__ == "__main__":
-    # Example 1: Standalone Valkey with authentication
-    standalone_config = {
-        "password": "my_secure_password",
-        "disable_commands": ["FLUSHDB", "FLUSHALL"],
-        "persistence_enabled": True,
-    }
-
-    valkey_standalone = create_standalone_valkey("my-valkey", **standalone_config)
-
-    # Example 2: Valkey replica set
-    primary_config = {
-        "password": "my_replica_password",
-        "disable_commands": ["FLUSHDB", "FLUSHALL"],
-        "persistence_enabled": True,
-    }
-
-    replica_config = {"disable_commands": ["FLUSHDB", "FLUSHALL"]}
-
-    valkey_replica_set = create_valkey_replica_set(
-        "my-valkey-replica-set", replica_count=2, primary_config=primary_config, replica_config=replica_config
-    )
+    main()

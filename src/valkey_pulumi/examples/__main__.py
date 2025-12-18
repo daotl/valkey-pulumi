@@ -8,11 +8,16 @@ Select an example by setting VALKEY_EXAMPLE to one of:
 """
 
 import os
+import sys
 
-from valkey_pulumi.examples.acl_example import acl_valkey
+# Ensure parent directory is in python path to allow imports
+# This is needed if this file is run directly or via Pulumi from a different working directory
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from valkey_pulumi.examples.acl_example import deploy_acl_valkey
 from valkey_pulumi.examples.replica_set import deploy_valkey_replica_set
 from valkey_pulumi.examples.standalone import deploy_standalone_valkey
-from valkey_pulumi.examples.tls_example import tls_valkey
+from valkey_pulumi.examples.tls_example import deploy_tls_valkey
 
 
 def main():
@@ -30,10 +35,9 @@ def main():
     if choice == "replica_set":
         deploy_valkey_replica_set()
     elif choice == "tls":
-        # The TLS example instantiates resources at import-time; reference to keep lint happy
-        _ = tls_valkey
+        deploy_tls_valkey()
     elif choice == "acl":
-        _ = acl_valkey
+        deploy_acl_valkey()
     else:
         deploy_standalone_valkey()
 

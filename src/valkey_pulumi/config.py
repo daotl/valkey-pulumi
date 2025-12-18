@@ -17,7 +17,7 @@ def _coalesce(*values):
 # Default configuration structure matching Bitnami Valkey environment variables
 DEFAULT_VALKEY_CONFIG = {
     # Basic Configuration
-    "image": "docker.io/bitnami/valkey:9.0",
+    "image": "docker.io/bitnami/valkey:latest",
     "database": "valkey",
     "valkey_data_dir": "/bitnami/valkey/data",
     "valkey_overrides_file": None,  # Default: "${VALKEY_MOUNTED_CONF_DIR}/overrides.conf"
@@ -145,171 +145,269 @@ class Config:
         
         """
         pulumi_config = pulumi.Config()
+        valkey_config = pulumi_config.get_object("valkey") or {}
 
         # Basic Configuration
-        self.image = _coalesce(image, pulumi_config.get("valkey:image"), DEFAULT_VALKEY_CONFIG["image"])
-        self.database = _coalesce(database, pulumi_config.get("valkey:database"), DEFAULT_VALKEY_CONFIG["database"])
+        self.image = _coalesce(
+            image, pulumi_config.get("image"), valkey_config.get("image"), DEFAULT_VALKEY_CONFIG["image"]
+        )
+        self.database = _coalesce(
+            database, pulumi_config.get("database"), valkey_config.get("database"), DEFAULT_VALKEY_CONFIG["database"]
+        )
         self.valkey_data_dir = _coalesce(
-            valkey_data_dir, pulumi_config.get("valkey:valkey_data_dir"), DEFAULT_VALKEY_CONFIG["valkey_data_dir"]
+            valkey_data_dir,
+            pulumi_config.get("valkey_data_dir"),
+            valkey_config.get("valkey_data_dir"),
+            DEFAULT_VALKEY_CONFIG["valkey_data_dir"],
         )
         self.valkey_overrides_file = _coalesce(
             valkey_overrides_file,
-            pulumi_config.get("valkey:valkey_overrides_file"),
+            pulumi_config.get("valkey_overrides_file"),
+            valkey_config.get("valkey_overrides_file"),
             DEFAULT_VALKEY_CONFIG["valkey_overrides_file"],
         )
         self.disable_commands = _coalesce(
             disable_commands,
-            pulumi_config.get_object("valkey:disable_commands"),
+            pulumi_config.get_object("disable_commands"),
+            valkey_config.get("disable_commands"),
             DEFAULT_VALKEY_CONFIG["disable_commands"],
         )
         value = _coalesce(
-            extra_flags, pulumi_config.get_object("valkey:extra_flags"), DEFAULT_VALKEY_CONFIG["extra_flags"]
+            extra_flags,
+            pulumi_config.get_object("extra_flags"),
+            valkey_config.get("extra_flags"),
+            DEFAULT_VALKEY_CONFIG["extra_flags"],
         )
         self.extra_flags = tuple(value if isinstance(value, (list, tuple)) else ())
 
         # Persistence
         self.aof_enabled = _coalesce(
-            aof_enabled, pulumi_config.get_bool("valkey:aof_enabled"), DEFAULT_VALKEY_CONFIG["aof_enabled"]
+            aof_enabled,
+            pulumi_config.get_bool("aof_enabled"),
+            valkey_config.get("aof_enabled"),
+            DEFAULT_VALKEY_CONFIG["aof_enabled"],
         )
         self.rdb_policy = _coalesce(
-            rdb_policy, pulumi_config.get("valkey:rdb_policy"), DEFAULT_VALKEY_CONFIG["rdb_policy"]
+            rdb_policy,
+            pulumi_config.get("rdb_policy"),
+            valkey_config.get("rdb_policy"),
+            DEFAULT_VALKEY_CONFIG["rdb_policy"],
         )
         self.rdb_policy_disabled = _coalesce(
             rdb_policy_disabled,
-            pulumi_config.get_bool("valkey:rdb_policy_disabled"),
+            pulumi_config.get_bool("rdb_policy_disabled"),
+            valkey_config.get("rdb_policy_disabled"),
             DEFAULT_VALKEY_CONFIG["rdb_policy_disabled"],
         )
 
         # Networking
         self.primary_host = _coalesce(
-            primary_host, pulumi_config.get("valkey:primary_host"), DEFAULT_VALKEY_CONFIG["primary_host"]
+            primary_host,
+            pulumi_config.get("primary_host"),
+            valkey_config.get("primary_host"),
+            DEFAULT_VALKEY_CONFIG["primary_host"],
         )
         self.primary_port_number = _coalesce(
             primary_port_number,
-            pulumi_config.get_int("valkey:primary_port_number"),
+            pulumi_config.get_int("primary_port_number"),
+            valkey_config.get("primary_port_number"),
             DEFAULT_VALKEY_CONFIG["primary_port_number"],
         )
-        self.port = _coalesce(port, pulumi_config.get_int("valkey:port"), DEFAULT_VALKEY_CONFIG["port"])
+        self.port = _coalesce(
+            port, pulumi_config.get_int("port"), valkey_config.get("port"), DEFAULT_VALKEY_CONFIG["port"]
+        )
         self.allow_remote_connections = _coalesce(
             allow_remote_connections,
-            pulumi_config.get_bool("valkey:allow_remote_connections"),
+            pulumi_config.get_bool("allow_remote_connections"),
+            valkey_config.get("allow_remote_connections"),
             DEFAULT_VALKEY_CONFIG["allow_remote_connections"],
         )
 
         # Replication
         self.replication_mode = _coalesce(
-            replication_mode, pulumi_config.get("valkey:replication_mode"), DEFAULT_VALKEY_CONFIG["replication_mode"]
+            replication_mode,
+            pulumi_config.get("replication_mode"),
+            valkey_config.get("replication_mode"),
+            DEFAULT_VALKEY_CONFIG["replication_mode"],
         )
         self.replica_ip = _coalesce(
-            replica_ip, pulumi_config.get("valkey:replica_ip"), DEFAULT_VALKEY_CONFIG["replica_ip"]
+            replica_ip,
+            pulumi_config.get("replica_ip"),
+            valkey_config.get("replica_ip"),
+            DEFAULT_VALKEY_CONFIG["replica_ip"],
         )
         self.replica_port = _coalesce(
-            replica_port, pulumi_config.get_int("valkey:replica_port"), DEFAULT_VALKEY_CONFIG["replica_port"]
+            replica_port,
+            pulumi_config.get_int("replica_port"),
+            valkey_config.get("replica_port"),
+            DEFAULT_VALKEY_CONFIG["replica_port"],
         )
-        self.primary_password = _coalesce(primary_password, pulumi_config.get_secret("valkey:primary_password"))
+        self.primary_password = _coalesce(
+            primary_password,
+            pulumi_config.get_secret("primary_password"),
+            valkey_config.get("primary_password"),
+            DEFAULT_VALKEY_CONFIG["primary_password"],
+        )
 
         # Authentication
-        self.password = _coalesce(password, pulumi_config.get_secret("valkey:password"))
+        self.password = _coalesce(
+            password,
+            pulumi_config.get_secret("password"),
+            valkey_config.get("password"),
+            DEFAULT_VALKEY_CONFIG["password"],
+        )
         self.allow_empty_password = _coalesce(
             allow_empty_password,
-            pulumi_config.get_bool("valkey:allow_empty_password"),
+            pulumi_config.get_bool("allow_empty_password"),
+            valkey_config.get("allow_empty_password"),
             DEFAULT_VALKEY_CONFIG["allow_empty_password"],
         )
 
         # Security
-        self.acl_file = _coalesce(acl_file, pulumi_config.get("valkey:acl_file"), DEFAULT_VALKEY_CONFIG["acl_file"])
+        self.acl_file = _coalesce(
+            acl_file, pulumi_config.get("acl_file"), valkey_config.get("acl_file"), DEFAULT_VALKEY_CONFIG["acl_file"]
+        )
 
         # Performance
         self.io_threads_do_reads = _coalesce(
             io_threads_do_reads,
-            pulumi_config.get_bool("valkey:io_threads_do_reads"),
+            pulumi_config.get_bool("io_threads_do_reads"),
+            valkey_config.get("io_threads_do_reads"),
             DEFAULT_VALKEY_CONFIG["io_threads_do_reads"],
         )
         self.io_threads = _coalesce(
-            io_threads, pulumi_config.get_int("valkey:io_threads"), DEFAULT_VALKEY_CONFIG["io_threads"]
+            io_threads,
+            pulumi_config.get_int("io_threads"),
+            valkey_config.get("io_threads"),
+            DEFAULT_VALKEY_CONFIG["io_threads"],
         )
 
         # TLS/SSL
         self.tls_enabled = _coalesce(
-            tls_enabled, pulumi_config.get_bool("valkey:tls_enabled"), DEFAULT_VALKEY_CONFIG["tls_enabled"]
+            tls_enabled,
+            pulumi_config.get_bool("tls_enabled"),
+            valkey_config.get("tls_enabled"),
+            DEFAULT_VALKEY_CONFIG["tls_enabled"],
         )
         self.tls_port_number = _coalesce(
-            tls_port_number, pulumi_config.get_int("valkey:tls_port_number"), DEFAULT_VALKEY_CONFIG["tls_port_number"]
+            tls_port_number,
+            pulumi_config.get_int("tls_port_number"),
+            valkey_config.get("tls_port_number"),
+            DEFAULT_VALKEY_CONFIG["tls_port_number"],
         )
         self.tls_cert_file = _coalesce(
-            tls_cert_file, pulumi_config.get("valkey:tls_cert_file"), DEFAULT_VALKEY_CONFIG["tls_cert_file"]
+            tls_cert_file,
+            pulumi_config.get("tls_cert_file"),
+            valkey_config.get("tls_cert_file"),
+            DEFAULT_VALKEY_CONFIG["tls_cert_file"],
         )
         self.tls_key_file = _coalesce(
-            tls_key_file, pulumi_config.get("valkey:tls_key_file"), DEFAULT_VALKEY_CONFIG["tls_key_file"]
+            tls_key_file,
+            pulumi_config.get("tls_key_file"),
+            valkey_config.get("tls_key_file"),
+            DEFAULT_VALKEY_CONFIG["tls_key_file"],
         )
         self.tls_ca_file = _coalesce(
-            tls_ca_file, pulumi_config.get("valkey:tls_ca_file"), DEFAULT_VALKEY_CONFIG["tls_ca_file"]
+            tls_ca_file,
+            pulumi_config.get("tls_ca_file"),
+            valkey_config.get("tls_ca_file"),
+            DEFAULT_VALKEY_CONFIG["tls_ca_file"],
         )
         self.tls_ca_dir = _coalesce(
-            tls_ca_dir, pulumi_config.get("valkey:tls_ca_dir"), DEFAULT_VALKEY_CONFIG["tls_ca_dir"]
+            tls_ca_dir,
+            pulumi_config.get("tls_ca_dir"),
+            valkey_config.get("tls_ca_dir"),
+            DEFAULT_VALKEY_CONFIG["tls_ca_dir"],
         )
-        self.tls_key_file_pass = _coalesce(tls_key_file_pass, pulumi_config.get_secret("valkey:tls_key_file_pass"))
+        self.tls_key_file_pass = _coalesce(
+            tls_key_file_pass,
+            pulumi_config.get_secret("tls_key_file_pass"),
+            valkey_config.get("tls_key_file_pass"),
+            DEFAULT_VALKEY_CONFIG["tls_key_file_pass"],
+        )
         self.tls_dh_params_file = _coalesce(
             tls_dh_params_file,
-            pulumi_config.get("valkey:tls_dh_params_file"),
+            pulumi_config.get("tls_dh_params_file"),
+            valkey_config.get("tls_dh_params_file"),
             DEFAULT_VALKEY_CONFIG["tls_dh_params_file"],
         )
         self.tls_auth_clients = _coalesce(
             tls_auth_clients,
-            pulumi_config.get_bool("valkey:tls_auth_clients"),
+            pulumi_config.get_bool("tls_auth_clients"),
+            valkey_config.get("tls_auth_clients"),
             DEFAULT_VALKEY_CONFIG["tls_auth_clients"],
         )
 
         # Configuration Files
         self.valkey_config_file = _coalesce(
             valkey_config_file,
-            pulumi_config.get("valkey:valkey_config_file"),
+            pulumi_config.get("valkey_config_file"),
+            valkey_config.get("valkey_config_file"),
             DEFAULT_VALKEY_CONFIG["valkey_config_file"],
         )
 
         # Pulumi-specific deployment settings
         self.persistence_enabled = _coalesce(
             persistence_enabled,
-            pulumi_config.get_bool("valkey:persistence_enabled"),
+            pulumi_config.get_bool("persistence_enabled"),
+            valkey_config.get("persistence_enabled"),
             DEFAULT_VALKEY_CONFIG["persistence_enabled"],
         )
         self.volume_name = _coalesce(
-            volume_name, pulumi_config.get("valkey:volume_name"), DEFAULT_VALKEY_CONFIG["volume_name"]
+            volume_name,
+            pulumi_config.get("volume_name"),
+            valkey_config.get("volume_name"),
+            DEFAULT_VALKEY_CONFIG["volume_name"],
         )
         self.host_data_path = _coalesce(
-            host_data_path, pulumi_config.get("valkey:host_data_path"), DEFAULT_VALKEY_CONFIG["host_data_path"]
+            host_data_path,
+            pulumi_config.get("host_data_path"),
+            valkey_config.get("host_data_path"),
+            DEFAULT_VALKEY_CONFIG["host_data_path"],
         )
         self.restart_policy = _coalesce(
-            restart_policy, pulumi_config.get("valkey:restart_policy"), DEFAULT_VALKEY_CONFIG["restart_policy"]
+            restart_policy,
+            pulumi_config.get("restart_policy"),
+            valkey_config.get("restart_policy"),
+            DEFAULT_VALKEY_CONFIG["restart_policy"],
         )
         self.replica_count = _coalesce(
-            replica_count, pulumi_config.get_int("valkey:replica_count"), DEFAULT_VALKEY_CONFIG["replica_count"]
+            replica_count,
+            pulumi_config.get_int("replica_count"),
+            valkey_config.get("replica_count"),
+            DEFAULT_VALKEY_CONFIG["replica_count"],
         )
         self.replica_port_offset = _coalesce(
             replica_port_offset,
-            pulumi_config.get_int("valkey:replica_port_offset"),
+            pulumi_config.get_int("replica_port_offset"),
+            valkey_config.get("replica_port_offset"),
             DEFAULT_VALKEY_CONFIG["replica_port_offset"],
         )
 
         # Sentinel configuration
         self.valkey_sentinel_primary_name = _coalesce(
             valkey_sentinel_primary_name,
-            pulumi_config.get("valkey:valkey_sentinel_primary_name"),
+            pulumi_config.get("valkey_sentinel_primary_name"),
+            valkey_config.get("valkey_sentinel_primary_name"),
             DEFAULT_VALKEY_CONFIG["valkey_sentinel_primary_name"],
         )
         self.valkey_sentinel_host = _coalesce(
             valkey_sentinel_host,
-            pulumi_config.get("valkey:valkey_sentinel_host"),
+            pulumi_config.get("valkey_sentinel_host"),
+            valkey_config.get("valkey_sentinel_host"),
             DEFAULT_VALKEY_CONFIG["valkey_sentinel_host"],
         )
         self.valkey_sentinel_port_number = _coalesce(
             valkey_sentinel_port_number,
-            pulumi_config.get_int("valkey:valkey_sentinel_port_number"),
+            pulumi_config.get_int("valkey_sentinel_port_number"),
+            valkey_config.get("valkey_sentinel_port_number"),
             DEFAULT_VALKEY_CONFIG["valkey_sentinel_port_number"],
         )
 
         # Extra environment variables (truly custom ones)
         config_extra_env_vars = (
-            pulumi_config.get_object("valkey:extra_env_vars") or DEFAULT_VALKEY_CONFIG["extra_env_vars"]
+            pulumi_config.get_object("extra_env_vars")
+            or valkey_config.get("extra_env_vars")
+            or DEFAULT_VALKEY_CONFIG["extra_env_vars"]
         )
         self.extra_env_vars = extra_env_vars or config_extra_env_vars
