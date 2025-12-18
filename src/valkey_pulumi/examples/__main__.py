@@ -21,23 +21,13 @@ from valkey_pulumi.examples.tls_example import deploy_tls_valkey
 
 
 def main():
-    """Run the selected Valkey deployment example.
+    """Run the selected Valkey example based on the VALKEY_EXAMPLE environment variable.
 
-    Reads the VALKEY_EXAMPLE environment variable to determine which example
-    to run. Defaults to 'standalone' if not set.
-
-    Available examples:
-        - standalone: Deploys a single Valkey instance
-        - replica_set: Deploys Valkey with replica configuration
-        - tls: Deploys Valkey with TLS encryption
-        - acl: Deploys Valkey with Access Control Lists (ACL)
-
-    Returns:
-        None
-
-    Raises:
-        ValueError: If VALKEY_EXAMPLE is set to an unsupported value.
-
+    Reads VALKEY_EXAMPLE (defaults to "standalone") and deploys the corresponding example:
+    - "standalone": deploys a single Valkey instance
+    - "replica_set": deploys a replica-set configuration
+    - "tls": triggers the TLS example (resources created at import time)
+    - "acl": triggers the ACL example (resources created at import time)
     """
     choice = os.environ.get("VALKEY_EXAMPLE", "standalone").lower()
 

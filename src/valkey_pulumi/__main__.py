@@ -37,7 +37,12 @@ def _env_args(env_map: dict[str, Any]) -> list[pulumi.Input[str]]:
 
 
 def _build_env(config: Config, overrides: dict[str, str | None] | None = None) -> list[pulumi.Input[str]]:
-    """Build environment variables for a container from a Config."""
+    """Build environment variables for a container from a Config.
+
+    Builds a mapping of Valkey-related environment names to values from `config`,
+    applies any `overrides` to that mapping, omits entries whose value is `None`,
+    and returns as a list. Any entries in `config.extra_env_vars` are appended as-is.
+    """
     env_map: dict[str, Any] = {
         # Authentication
         "ALLOW_EMPTY_PASSWORD": "yes" if config.allow_empty_password else None,
@@ -190,7 +195,11 @@ class ValkeyStandalone:
         self._deploy()
 
     def _deploy(self):
-        """Deploy the standalone Valkey container."""
+        """Deploy the standalone Valkey container.
+
+        Creates and configures data persistence (host bind or Docker volume), mounts TLS/ACL/config files,
+        instantiates the Docker container, and exports Pulumi outputs for host, port, and endpoint.
+        """
         volume_name = self.config.volume_name or f"{self.name}_data"
 
         # Create volume/bind for data persistence
@@ -285,7 +294,13 @@ class ValkeyReplicaSet:
         return _build_env(self.replica_config, overrides)
 
     def _deploy(self):
-        """Deploy the Valkey replica set."""
+        """Create and deploy a Valkey replica set: a shared network, a primary container, and one or more replica containers.
+
+        This builds and attaches persistent storage (host path or Docker volumes) for primary and replicas as configured,
+        creates a dedicated Docker network, starts the primary and replica containers with appropriate environment, ports,
+        volumes, and restart policies, and exports connection details (primary host, port, primary endpoint, per-replica
+        host/port, and a list of replica endpoints) for external use.
+        """
         # Create shared network for communication
         self.network = docker.Network(f"{self.name}_network", name=f"{self.name}_network", driver="bridge")
 
